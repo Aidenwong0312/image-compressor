@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>圖片壓縮器｜本地瀏覽器版</title>
+  <style>
+    :root{
+      --bg:#0b1220; --panel:#121a2b; --muted:#7c8aa0; --text:#e9eef7; --brand:#5aa7ff; --ok:#38d39f; --warn:#ffc658;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; background:linear-gradient(180deg,#0b1220,#0f1526 40%,#0b1220); color:var(--text)}
+    .wrap{max-width:1100px; margin:32px auto; padding:0 16px}
+    h1{font-size:clamp(22px,2.6vw,32px); margin:0 0 12px; letter-spacing:0.3px}
+    p.sub{margin:0 0 20px; color:var(--muted)}
+
+    .grid{display:grid; grid-template-columns:1.1fr 1.3fr; gap:16px}
+    @media (max-width: 960px){.grid{grid-template-columns:1fr}}
+
+    .card{background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.25)}
+    .card h2{font-size:18px; margin:0 0 12px}
+    .pad{padding:18px}
+    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    .row > *{flex:1}
+    label{display:block; font-size:12px; color:var(--muted); margin:8px 0 6px}
+    input[type="number"], input[type="text"], select{width:100%; padding:10px 12px; background:#0c1424; color:var(--text); border:1px solid rgba(255,255,255,0.08); border-radius:10px; outline:none}
+    input[type="checkbox"]{transform:scale(1.1)}
+    .slider{width:100%}
+    .btn{appearance:none; border:0; background:linear-gradient(180deg,#69b6ff,#3d86ff); color:white; padding:12px 16px; border-radius:12px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(61,134,255,0.35)}
+    .btn:disabled{filter:grayscale(1); opacity:0.6; cursor:not-allowed}
+    .btn.secondary{background:#1b2540; border:1px solid rgba(255,255,255,0.08); box-shadow:none}
+    .muted{color:var(--muted)}
+
+    .drop{border:2px dashed rgba(255,255,255,0.15); border-radius:14px; padding:22px; text-align:center; transition:0.2s}
+    .drop.drag{border-color:var(--brand); background:rgba(90,167,255,0.08)}
+
+    .thumbs{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; padding:12px}
+    .thumb{background:#0d1526; border:1px solid rgba(255,255,255,0.08); border-radius:12px; overflow:hidden}
+    .thumb .img{display:flex; align-items:center; justify-content:center; height:160px; background:#0a1120}
+    .thumb img{max-width:100%; max-height:100%}
+    .thumb .meta{padding:10px 12px; font-size:12px; color:var(--muted)}
+    .thumb .actions{display:flex; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,0.06)}
+    .pill{font-size:11px; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08)}
+    .ok{color:#0fdeac}
+    .warn{color:#ffd36b}
+
+    footer{margin:16px 0 8px; color:var(--muted); font-size:12px}
+    a.link{color:#93c5ff; text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>圖片壓縮器（本地執行，安全不外傳）</h1>
+    <p class="sub">上傳圖片 → 設定尺寸/格式/品質/檔名 → 批次壓縮並下載。全部在你的瀏覽器內完成。</p>
+
+    <div class="grid">
+      <!-- 左：控制面板 -->
+      <div class="card pad">
+        <h2>1) 選擇檔案</h2>
+        <div id="drop" class="drop">
+          <p class="muted">拖放圖片到此，或</p>
+          <input id="file" type="file" accept="image/*" multiple />
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="clear" class="btn secondary" type="button">清空列表</button>
+        </div>
+
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:18px 0" />
+
+        <h2>2) 輸出設定</h2>
+        <div class="row">
+          <div>
+            <label>Resize 模式</label>
+            <select id="resizeMode">
+              <option value="original">不縮放（僅壓縮）</option>
+              <option value="max">限制最長邊（px）</option>
+              <option value="width">固定寬度（px）</option>
+              <option value="height">固定高度（px）</option>
+              <option value="percent">百分比（%）</option>
+            </select>
+          </div>
+          <div>
+            <label>參數值</label>
+            <input id="resizeValue" type="number" placeholder="如：1920 或 75" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>輸出格式</label>
+            <select id="format">
+              <option value="image/jpeg">JPEG (.jpg)</option>
+              <option value="image/webp">WebP (.webp)</option>
+              <option value="image/png">PNG (.png)</option>
+              <option value="image/avif">AVIF (.avif)【若瀏覽器支援】</option>
+            </select>
+          </div>
+          <div>
+            <label>品質（有損格式）</label>
+            <input id="quality" class="slider" type="range" min="0.1" max="1" step="0.01" value="0.8" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>重新命名規則</label>
+            <input id="rename" type="text" value="{name}-{index}" />
+            <div class="muted" style="font-size:11px;margin-top:4px">
+              可用變數：{name} 原檔名（無副檔名）、{ext} 原始副檔名、{index} 從1開始、{w}、{h}、{ts} 時戳
+            </div>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <div class="row" style="align-items:center">
+              <label style="flex:0 0 auto"><input id="keepExif" type="checkbox" /> 嘗試保留方向(Exif)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="run" class="btn" type="button" disabled>壓縮 0 張</button>
+          <button id="zipAll" class="btn secondary" type="button" disabled>全部打包 .zip</button>
+        </div>
+      </div>
+
+      <!-- 右：預覽與結果 -->
+      <div class="card">
+        <div class="pad">
+          <h2>3) 預覽與下載</h2>
+          <div class="muted" id="count">尚未選擇檔案</div>
+        </div>
+        <div id="list" class="thumbs"></div>
+      </div>
+    </div>
+
+    <footer>
+      由瀏覽器 <code>&lt;canvas&gt;</code> 進行壓縮與轉檔。部分格式（如 AVIF）依賴瀏覽器支援。
+      原始圖 EXIF 方向將盡量遵從；如遇旋轉問題，請取消「保留方向」。
+      ｜<a class="link" href="#" id="demoBtn">載入示例圖</a>
+    </footer>
+  </div>
+
+  <!-- 可選：JSZip 用於「全部打包 .zip」功能（CDN） -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <script>
+    const el = (sel)=>document.querySelector(sel);
+    const fileInput = el('#file');
+    const drop = el('#drop');
+    const list = el('#list');
+    const countLabel = el('#count');
+    const runBtn = el('#run');
+    const zipBtn = el('#zipAll');
+    const clearBtn = el('#clear');
+    const demoBtn = el('#demoBtn');
+
+    const resizeMode = el('#resizeMode');
+    const resizeValue = el('#resizeValue');
+    const formatSel = el('#format');
+    const quality = el('#quality');
+    const rename = el('#rename');
+    const keepExif = el('#keepExif');
+
+    let files = []; // {file, name, ext, size}
+    let results = []; // {blob, url, w, h, outName, size}
+
+    function humanSize(n){
+      if(n < 1024) return n + ' B';
+      const u=['KB','MB','GB']; let i=-1; do{n/=1024; i++}while(n>=1024 && i<u.length-1);
+      return n.toFixed( (i===0)?1:2 )+' '+u[i];
+    }
+
+    function updateUI(){
+      countLabel.textContent = files.length ? `已選擇 ${files.length} 張` : '尚未選擇檔案';
+      runBtn.disabled = files.length===0;
+      runBtn.textContent = files.length ? `壓縮 ${files.length} 張` : '壓縮 0 張';
+      zipBtn.disabled = results.length===0;
+    }
+
+    function addFiles(listOfFiles){
+      for(const f of listOfFiles){
+        if(!f.type.startsWith('image/')) continue;
+        const name = f.name.replace(/\.[^.]+$/,'');
+        const ext = (f.name.split('.').pop()||'').toLowerCase();
+        files.push({file:f, name, ext, size:f.size});
+      }
+      renderThumbs();
+      updateUI();
+    }
+
+    function renderThumbs(){
+      list.innerHTML = '';
+      files.forEach((item, i)=>{
+        const card = document.createElement('div'); card.className='thumb';
+        const imgBox = document.createElement('div'); imgBox.className='img';
+        const meta = document.createElement('div'); meta.className='meta';
+        const act = document.createElement('div'); act.className='actions';
+
+        const imgel = document.createElement('img');
+        imgel.alt = item.name;
+        const reader = new FileReader();
+        reader.onload = e=>{ imgel.src = e.target.result };
+        reader.readAsDataURL(item.file);
+        imgBox.appendChild(imgel);
+
+        meta.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span class="pill">原始 ${humanSize(item.size)}</span>
+          <button class="btn secondary" style="padding:8px 12px" data-remove="${i}">移除</button>
+        </div>
+        <div class="muted" style="margin-top:6px">${item.file.type || item.ext.toUpperCase()}</div>`;
+
+        act.innerHTML = `<a class="btn secondary" style="flex:1; text-align:center" data-compress="${i}">僅壓縮此圖</a>`;
+
+        card.appendChild(imgBox); card.appendChild(meta); card.appendChild(act);
+        list.appendChild(card);
+      });
+
+      // 綁定單張壓縮/移除
+      list.querySelectorAll('[data-compress]').forEach(btn=>btn.addEventListener('click', async (e)=>{
+        const idx = +e.currentTarget.getAttribute('data-compress');
+        await compressOne(idx);
+      }));
+      list.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const idx = +e.currentTarget.getAttribute('data-remove');
+        files.splice(idx,1); results = results.filter(r=>r._index!==idx);
+        renderThumbs(); updateUI();
+      }));
+    }
+
+    async function readImageBitmap(file){
+      try{
+        // 尊重 EXIF 方向（若瀏覽器支援）
+        return await createImageBitmap(file, {imageOrientation: keepExif.checked ? 'from-image' : 'none'});
+      }catch(err){
+        // 回退到 HTMLImageElement
+        return new Promise((resolve, reject)=>{
+          const img = new Image();
+          img.onload = ()=>resolve(img);
+          img.onerror = reject;
+          img.src = URL.createObjectURL(file);
+        });
+      }
+    }
+
+    function calcSize(w, h){
+      const mode = resizeMode.value;
+      const v = parseFloat(resizeValue.value);
+      if(!v || mode==='original') return {w, h};
+      switch(mode){
+        case 'max':{
+          const max = v; const r = w>h ? max/w : max/h; return {w: Math.round(w*r), h: Math.round(h*r)};
+        }
+        case 'width':{
+          const r = v / w; return {w: Math.round(v), h: Math.round(h*r)};
+        }
+        case 'height':{
+          const r = v / h; return {w: Math.round(w*r), h: Math.round(v)};
+        }
+        case 'percent':{
+          const r = v/100; return {w: Math.round(w*r), h: Math.round(h*r)};
+        }
+      }
+      return {w, h};
+    }
+
+    function getOutExt(){
+      const mime = formatSel.value;
+      return mime==='image/jpeg'?'jpg': mime==='image/png'?'png': mime==='image/webp'?'webp': mime==='image/avif'?'avif':'jpg';
+    }
+
+    function makeName(tpl, ctx){
+      return tpl.replace(/\{(name|ext|index|w|h|ts)\}/g, (_,k)=> ctx[k] ?? '');
+    }
+
+    async function compressOne(i){
+      const it = files[i]; if(!it) return;
+      const bmp = await readImageBitmap(it.file);
+      const {w, h} = calcSize(bmp.width, bmp.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bmp, 0, 0, w, h);
+
+      const mime = formatSel.value;
+      const q = parseFloat(quality.value) || 0.8;
+
+      const blob = await new Promise(res=> canvas.toBlob(res, mime, (mime==='image/png')? undefined : q));
+      const url = URL.createObjectURL(blob);
+      const outName = makeName(rename.value, {name: it.name, ext: it.ext, index: i+1, w, h, ts: Date.now()}) + '.' + getOutExt();
+
+      // 更新卡片 UI
+      const card = list.children[i];
+      const meta = card.querySelector('.meta');
+      const actions = card.querySelector('.actions');
+      const after = document.createElement('div'); after.className='meta';
+      after.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span class="pill ok">輸出 ${humanSize(blob.size)} · ${w}×${h}</span>
+        <a class="btn" style="padding:8px 12px" download="${outName}" href="${url}">下載</a>
+      </div>
+      <div class="muted" style="margin-top:6px">${mime} → <code>${outName}</code></div>`;
+
+      // 若已存在結果區塊，先移除
+      const old = card.querySelectorAll('.meta')[1]; if(old) old.remove();
+      actions.before(after);
+
+      const record = {blob, url, w, h, outName, size: blob.size, _index:i};
+      // 替換或新增結果
+      const existIdx = results.findIndex(r=>r._index===i);
+      if(existIdx>=0) results[existIdx]=record; else results.push(record);
+      updateUI();
+      return record;
+    }
+
+    async function compressAll(){
+      results = [];
+      for(let i=0;i<files.length;i++){
+        // eslint-disable-next-line no-await-in-loop
+        await compressOne(i);
+      }
+    }
+
+    async function zipAll(){
+      if(!results.length){
+        // 若尚未壓縮，先壓縮
+        await compressAll();
+      }
+      const zip = new JSZip();
+      for(const r of results){ zip.file(r.outName, r.blob); }
+      const blob = await zip.generateAsync({type:'blob'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `compressed_${Date.now()}.zip`; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    }
+
+    // 事件
+    fileInput.addEventListener('change', e=>{ addFiles(e.target.files); e.target.value=''; });
+
+    ;['dragenter','dragover'].forEach(ev=> drop.addEventListener(ev, e=>{
+      e.preventDefault(); e.stopPropagation(); drop.classList.add('drag');
+    }));
+    ;['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{
+      e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag');
+    }));
+    drop.addEventListener('drop', e=>{ const dt = e.dataTransfer; if(dt?.files?.length) addFiles(dt.files); });
+
+    runBtn.addEventListener('click', compressAll);
+    zipBtn.addEventListener('click', zipAll);
+    clearBtn.addEventListener('click', ()=>{ files=[]; results=[]; renderThumbs(); updateUI(); });
+
+    // 瀏覽器支援檢查
+    (function(){
+      const avifOk = document.createElement('canvas').toDataURL('image/avif').startsWith('data:image/avif');
+      if(!avifOk){
+        // 灰掉 AVIF 選項
+        [...formatSel.options].forEach(o=>{ if(o.value==='image/avif'){ o.textContent='AVIF (.avif)【瀏覽器不支援】'; o.disabled=true; }});
+      }
+    })();
+
+    // Demo：載入一張示例圖（免上傳）
+    demoBtn.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='800'>
+        <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#5aa7ff'/><stop offset='100%' stop-color='#8A63FF'/></linearGradient></defs>
+        <rect width='100%' height='100%' fill='url(#g)'/>
+        <g font-family='sans-serif' fill='white'>
+          <text x='50' y='120' font-size='64' font-weight='700'>Demo Image</text>
+          <text x='50' y='200' font-size='28' opacity='0.9'>你可以上傳自己的圖片來測試壓縮效果。</text>
+        </g>
+      </svg>`;
+      const blob = new Blob([svg], {type:'image/svg+xml'});
+      const file = new File([blob], 'demo.svg', {type:'image/svg+xml'});
+      addFiles([file]);
+    });
+
+    updateUI();
+  </script>
+</body>
+</html>
