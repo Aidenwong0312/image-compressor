@@ -50,24 +50,24 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>圖片壓縮器（本地執行，安全不外傳）</h1>
-    <p class="sub">上傳圖片 → 設定尺寸/格式/品質/檔名 → 批次壓縮並下載。全部在你的瀏覽器內完成。</p>
+    <h1 data-cms="siteTitle">圖片壓縮器（本地執行，安全不外傳）</h1>
+    <p class="sub" data-cms="subtitle">上傳圖片 → 設定尺寸/格式/品質/檔名 → 批次壓縮並下載。全部在你的瀏覽器內完成。</p>
 
     <div class="grid">
       <!-- 左：控制面板 -->
       <div class="card pad">
-        <h2>1) 選擇檔案</h2>
+        <h2 data-cms="sections.uploadTitle">1) 選擇檔案</h2>
         <div id="drop" class="drop">
-          <p class="muted">拖放圖片到此，或</p>
+          <p class="muted" data-cms="upload.dropHint">拖放圖片到此，或</p>
           <input id="file" type="file" accept="image/*" multiple />
         </div>
         <div class="row" style="margin-top:10px">
-          <button id="clear" class="btn secondary" type="button">清空列表</button>
+          <button id="clear" class="btn secondary" type="button" data-cms="buttons.clear">清空列表</button>
         </div>
 
         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.08); margin:18px 0" />
 
-        <h2>2) 輸出設定</h2>
+        <h2 data-cms="sections.outputTitle">2) 輸出設定</h2>
         <div class="row">
           <div>
             <label>Resize 模式</label>
@@ -77,11 +77,19 @@
               <option value="width">固定寬度（px）</option>
               <option value="height">固定高度（px）</option>
               <option value="percent">百分比（%）</option>
+              <option value="both">固定寬高（px）</option>
             </select>
           </div>
-          <div>
+          <div id="singleParamGroup">
             <label>參數值</label>
             <input id="resizeValue" type="number" placeholder="如：1920 或 75" />
+          </div>
+          <div id="bothParamGroup" style="display:none">
+            <label>寬度 / 高度（px）</label>
+            <div class="row" style="gap:8px">
+              <input id="resizeW" type="number" placeholder="寬度，如：1920" />
+              <input id="resizeH" type="number" placeholder="高度，如：1080" />
+            </div>
           </div>
         </div>
         <div class="row">
@@ -124,7 +132,7 @@
       <!-- 右：預覽與結果 -->
       <div class="card">
         <div class="pad">
-          <h2>3) 預覽與下載</h2>
+          <h2 data-cms="sections.previewTitle">3) 預覽與下載</h2>
           <div class="muted" id="count">尚未選擇檔案</div>
         </div>
         <div id="list" class="thumbs"></div>
@@ -132,9 +140,9 @@
     </div>
 
     <footer>
-      由瀏覽器 <code>&lt;canvas&gt;</code> 進行壓縮與轉檔。部分格式（如 AVIF）依賴瀏覽器支援。
-      原始圖 EXIF 方向將盡量遵從；如遇旋轉問題，請取消「保留方向」。
-      ｜<a class="link" href="#" id="demoBtn">載入示例圖</a>
+      <span data-cms="footer">由瀏覽器 <code>&lt;canvas&gt;</code> 進行壓縮與轉檔。部分格式（如 AVIF）依賴瀏覽器支援。
+      原始圖 EXIF 方向將盡量遵從；如遇旋轉問題，請取消「保留方向」。</span>
+      ｜<a class="link" href="#" id="demoBtn" data-cms="demoLink">載入示例圖</a>
     </footer>
   </div>
 
@@ -154,10 +162,51 @@
 
     const resizeMode = el('#resizeMode');
     const resizeValue = el('#resizeValue');
+    const resizeW = el('#resizeW');
+    const resizeH = el('#resizeH');
+    const singleParamGroup = el('#singleParamGroup');
+    const bothParamGroup = el('#bothParamGroup');
     const formatSel = el('#format');
     const quality = el('#quality');
     const rename = el('#rename');
     const keepExif = el('#keepExif');
+
+    // === CMS（文字可由 content.json 覆寫） ===
+    const CMS_DEFAULTS = {
+      siteTitle: "圖片壓縮器（本地執行，安全不外傳）",
+      subtitle: "上傳圖片 → 設定尺寸/格式/品質/檔名 → 批次壓縮並下載。全部在你的瀏覽器內完成。",
+      sections: {
+        uploadTitle: "1) 選擇檔案",
+        outputTitle: "2) 輸出設定",
+        previewTitle: "3) 預覽與下載"
+      },
+      upload: {
+        dropHint: "拖放圖片到此，或",
+        none: "尚未選擇檔案",
+        count: "已選擇 {count} 張"
+      },
+      buttons: {
+        clear: "清空列表",
+        compressAll: "壓縮 {count} 張",
+        zipAll: "全部打包 .zip",
+        remove: "移除",
+        compressOne: "僅壓縮此圖",
+        download: "下載"
+      },
+      labels: {
+        original: "原始 {size}",
+        output: "輸出 {size} · {w}×{h}"
+      },
+      footer: "由瀏覽器 <code>&lt;canvas&gt;</code> 進行壓縮與轉檔。部分格式（如 AVIF）依賴瀏覽器支援。原始圖 EXIF 方向將盡量遵從；如遇旋轉問題，請取消「保留方向」。",
+      demoLink: "載入示例圖"
+    };
+    let cmsData = JSON.parse(JSON.stringify(CMS_DEFAULTS));
+    function deepMerge(t,s){t=t||{};for(const k in s){if(s[k]&&typeof s[k]==='object'&&!Array.isArray(s[k])){t[k]=deepMerge(t[k]||{},s[k]);}else{t[k]=s[k];}}return t;}
+    function getPath(o,p){return p.split('.').reduce((x,k)=> (x&&k in x)?x[k]:undefined,o);}
+    function cmsText(path){const v=getPath(cmsData,path);return (typeof v==='string')?v:(getPath(CMS_DEFAULTS,path)||'');}
+    function applyCMS(){document.querySelectorAll('[data-cms]').forEach(el=>{const key=el.getAttribute('data-cms');const v=cmsText(key); if(v) el.innerHTML=v;});}
+    try{fetch('content.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(d){cmsData=deepMerge(JSON.parse(JSON.stringify(CMS_DEFAULTS)),d);applyCMS();updateUI();}});}catch(e){}
+    applyCMS();
 
     let files = []; // {file, name, ext, size}
     let results = []; // {blob, url, w, h, outName, size}
@@ -169,7 +218,15 @@
     }
 
     function updateUI(){
-      countLabel.textContent = files.length ? `已選擇 ${files.length} 張` : '尚未選擇檔案';
+      const hasFiles = files.length>0;
+      const countText = hasFiles ? cmsText('upload.count').replace('{count}', files.length) : cmsText('upload.none');
+      countLabel.textContent = countText;
+      runBtn.disabled = !hasFiles;
+      runBtn.textContent = cmsText('buttons.compressAll').replace('{count}', files.length);
+      zipBtn.disabled = results.length===0;
+      zipBtn.textContent = cmsText('buttons.zipAll');
+      clearBtn.textContent = cmsText('buttons.clear');
+    } 張` : '尚未選擇檔案';
       runBtn.disabled = files.length===0;
       runBtn.textContent = files.length ? `壓縮 ${files.length} 張` : '壓縮 0 張';
       zipBtn.disabled = results.length===0;
@@ -198,6 +255,32 @@
         imgel.alt = item.name;
         const reader = new FileReader();
         reader.onload = e=>{ imgel.src = e.target.result };
+        reader.readAsDataURL(item.file);
+        imgBox.appendChild(imgel);
+
+        meta.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span class="pill">${cmsText('labels.original').replace('{size}', humanSize(item.size))}</span>
+          <button class="btn secondary" style="padding:8px 12px" data-remove="${i}">${cmsText('buttons.remove')}</button>
+        </div>
+        <div class="muted" style="margin-top:6px">${item.file.type || item.ext.toUpperCase()}</div>`;
+
+        act.innerHTML = `<a class="btn secondary" style="flex:1; text-align:center" data-compress="${i}">${cmsText('buttons.compressOne')}</a>`;
+
+        card.appendChild(imgBox); card.appendChild(meta); card.appendChild(act);
+        list.appendChild(card);
+      });
+
+      // 綁定單張壓縮/移除
+      list.querySelectorAll('[data-compress]').forEach(btn=>btn.addEventListener('click', async (e)=>{
+        const idx = +e.currentTarget.getAttribute('data-compress');
+        await compressOne(idx);
+      }));
+      list.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click', (e)=>{
+        const idx = +e.currentTarget.getAttribute('data-remove');
+        files.splice(idx,1); results = results.filter(r=>r._index!==idx);
+        renderThumbs(); updateUI();
+      }));
+    };
         reader.readAsDataURL(item.file);
         imgBox.appendChild(imgel);
 
@@ -242,24 +325,17 @@
 
     function calcSize(w, h){
       const mode = resizeMode.value;
+      if(mode==='both'){
+        const W = parseInt(resizeW?.value||'', 10);
+        const H = parseInt(resizeH?.value||'', 10);
+        if(Number.isFinite(W) && W>0 && Number.isFinite(H) && H>0){
+          return { w: Math.round(W), h: Math.round(H) };
+        }
+        return {w, h};
+      }
       const v = parseFloat(resizeValue.value);
       if(!v || mode==='original') return {w, h};
       switch(mode){
-        case 'max':{
-          const max = v; const r = w>h ? max/w : max/h; return {w: Math.round(w*r), h: Math.round(h*r)};
-        }
-        case 'width':{
-          const r = v / w; return {w: Math.round(v), h: Math.round(h*r)};
-        }
-        case 'height':{
-          const r = v / h; return {w: Math.round(w*r), h: Math.round(v)};
-        }
-        case 'percent':{
-          const r = v/100; return {w: Math.round(w*r), h: Math.round(h*r)};
-        }
-      }
-      return {w, h};
-    }
 
     function getOutExt(){
       const mime = formatSel.value;
@@ -292,8 +368,8 @@
       const actions = card.querySelector('.actions');
       const after = document.createElement('div'); after.className='meta';
       after.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <span class="pill ok">輸出 ${humanSize(blob.size)} · ${w}×${h}</span>
-        <a class="btn" style="padding:8px 12px" download="${outName}" href="${url}">下載</a>
+        <span class="pill ok">${cmsText('labels.output').replace('{size}', humanSize(blob.size)).replace('{w}', w).replace('{h}', h)}</span>
+        <a class="btn" style="padding:8px 12px" download="${outName}" href="${url}">${cmsText('buttons.download')}</a>
       </div>
       <div class="muted" style="margin-top:6px">${mime} → <code>${outName}</code></div>`;
 
