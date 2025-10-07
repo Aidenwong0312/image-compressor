@@ -205,7 +205,19 @@
     function getPath(o,p){return p.split('.').reduce((x,k)=> (x&&k in x)?x[k]:undefined,o);}
     function cmsText(path){const v=getPath(cmsData,path);return (typeof v==='string')?v:(getPath(CMS_DEFAULTS,path)||'');}
     function applyCMS(){document.querySelectorAll('[data-cms]').forEach(el=>{const key=el.getAttribute('data-cms');const v=cmsText(key); if(v) el.innerHTML=v;});}
-    try{fetch('content.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(d){cmsData=deepMerge(JSON.parse(JSON.stringify(CMS_DEFAULTS)),d);applyCMS();updateUI();}});}catch(e){}
+    try{fetch('content.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(d){cmsData=deepMerge(JSON.parse(JSON.stringify(CMS_DEFAULTS)),d);applyCMS();updateUI();
+    // 顯示/隱藏參數區
+    function toggleResizeInputs(){
+      if(resizeMode.value==='both'){
+        bothParamGroup.style.display='block';
+        singleParamGroup.style.display='none';
+      }else{
+        bothParamGroup.style.display='none';
+        singleParamGroup.style.display='block';
+      }
+    }
+    resizeMode.addEventListener('change', toggleResizeInputs);
+    toggleResizeInputs();}});}catch(e){}
     applyCMS();
 
     let files = []; // {file, name, ext, size}
@@ -226,10 +238,6 @@
       zipBtn.disabled = results.length===0;
       zipBtn.textContent = cmsText('buttons.zipAll');
       clearBtn.textContent = cmsText('buttons.clear');
-    } 張` : '尚未選擇檔案';
-      runBtn.disabled = files.length===0;
-      runBtn.textContent = files.length ? `壓縮 ${files.length} 張` : '壓縮 0 張';
-      zipBtn.disabled = results.length===0;
     }
 
     function addFiles(listOfFiles){
@@ -280,32 +288,6 @@
         files.splice(idx,1); results = results.filter(r=>r._index!==idx);
         renderThumbs(); updateUI();
       }));
-    };
-        reader.readAsDataURL(item.file);
-        imgBox.appendChild(imgel);
-
-        meta.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <span class="pill">原始 ${humanSize(item.size)}</span>
-          <button class="btn secondary" style="padding:8px 12px" data-remove="${i}">移除</button>
-        </div>
-        <div class="muted" style="margin-top:6px">${item.file.type || item.ext.toUpperCase()}</div>`;
-
-        act.innerHTML = `<a class="btn secondary" style="flex:1; text-align:center" data-compress="${i}">僅壓縮此圖</a>`;
-
-        card.appendChild(imgBox); card.appendChild(meta); card.appendChild(act);
-        list.appendChild(card);
-      });
-
-      // 綁定單張壓縮/移除
-      list.querySelectorAll('[data-compress]').forEach(btn=>btn.addEventListener('click', async (e)=>{
-        const idx = +e.currentTarget.getAttribute('data-compress');
-        await compressOne(idx);
-      }));
-      list.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click', (e)=>{
-        const idx = +e.currentTarget.getAttribute('data-remove');
-        files.splice(idx,1); results = results.filter(r=>r._index!==idx);
-        renderThumbs(); updateUI();
-      }));
     }
 
     async function readImageBitmap(file){
@@ -336,6 +318,21 @@
       const v = parseFloat(resizeValue.value);
       if(!v || mode==='original') return {w, h};
       switch(mode){
+        case 'max':{
+          const max = v; const r = w>h ? max/w : max/h; return {w: Math.round(w*r), h: Math.round(h*r)};
+        }
+        case 'width':{
+          const r = v / w; return {w: Math.round(v), h: Math.round(h*r)};
+        }
+        case 'height':{
+          const r = v / h; return {w: Math.round(w*r), h: Math.round(v)};
+        }
+        case 'percent':{
+          const r = v/100; return {w: Math.round(w*r), h: Math.round(h*r)};
+        }
+      }
+      return {w, h};
+    }
 
     function getOutExt(){
       const mime = formatSel.value;
@@ -416,7 +413,14 @@
     ;['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{
       e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag');
     }));
-    drop.addEventListener('drop', e=>{ const dt = e.dataTransfer; if(dt?.files?.length) addFiles(dt.files); });
+    drop.addEventListener('drop', e=>{ 
+      e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag');
+      const dt = e.dataTransfer; 
+      const fl = (dt?.files && dt.files.length) ? dt.files : Array.from(dt?.items||[]).map(i=> i.getAsFile()).filter(Boolean);
+      if(fl && fl.length) addFiles(fl);
+    });
+    // 也支援點擊上傳
+    drop.addEventListener('click', ()=> fileInput.click());
 
     runBtn.addEventListener('click', compressAll);
     zipBtn.addEventListener('click', zipAll);
